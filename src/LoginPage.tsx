@@ -1,4 +1,5 @@
 import { ArrowRight, Bot, LockKeyhole, ShieldCheck } from 'lucide-react'
+import './login.css'
 
 export default function LoginPage(){
   const start=()=>{window.location.href='https://discord.com/oauth2/authorize'}
