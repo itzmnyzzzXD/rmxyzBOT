@@ -101,9 +101,66 @@ create table if not exists trust_entries (
   expires_at timestamptz
 );
 
+create table if not exists dashboard_users (
+  id uuid primary key default gen_random_uuid(),
+  discord_id text not null unique,
+  discord_username text not null,
+  username text not null unique,
+  password_hash text not null,
+  email text,
+  created_at timestamptz not null default now(),
+  last_login_at timestamptz
+);
+
+create table if not exists dashboard_memberships (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references dashboard_users(id) on delete cascade,
+  server_id text not null,
+  role text not null default 'owner',
+  created_at timestamptz not null default now(),
+  unique(user_id,server_id)
+);
+
+create table if not exists dashboard_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references dashboard_users(id) on delete cascade,
+  token_hash text not null unique,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now()
+);
+
+create table if not exists dashboard_verify_tokens (
+  id uuid primary key default gen_random_uuid(),
+  token_hash text not null unique,
+  discord_id text not null,
+  discord_username text not null,
+  guild_id text not null,
+  email text,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists bot_tasks (
+  id uuid primary key default gen_random_uuid(),
+  server_id text,
+  task_type text not null,
+  payload jsonb not null default '{}'::jsonb,
+  created_by text,
+  status text not null default 'pending',
+  error text,
+  created_at timestamptz not null default now(),
+  claimed_at timestamptz,
+  completed_at timestamptz
+);
+
 create index if not exists moderation_cases_server_created on moderation_cases(server_id,created_at desc);
 create index if not exists audit_logs_server_created on audit_logs(server_id,created_at desc);
 create index if not exists warnings_server_user on warnings(server_id,user_id,created_at desc);
+create index if not exists dashboard_sessions_token on dashboard_sessions(token_hash);
+create index if not exists dashboard_verify_tokens_hash on dashboard_verify_tokens(token_hash);
+create index if not exists bot_tasks_status_created on bot_tasks(status,created_at);
 
 insert into bot_sync_state(id) values('global') on conflict(id) do nothing;
 
