@@ -37,7 +37,60 @@ end = code.find("# -------------------------------------------------------------
 if start == -1 or end == -1:
     raise RuntimeError("Could not locate the verification section in the known-good bot source")
 
-verification = r'''class VerifyStartView(discord.ui.View):
+verification = r'''async def create_verify_link(member: discord.Member, guild: discord.Guild) -> str:
+    """Create a dashboard verification link with useful diagnostics.
+
+    The dashboard may return a JSON error even when the HTTP request itself
+    succeeds. Log the response body so VPS logs show the actual backend error
+    instead of a generic JSON parsing exception.
+    """
+    if bot.session is None:
+        raise RuntimeError("HTTP session is not ready")
+    if not SYNC_KEY:
+        raise RuntimeError("BOT_SYNC_KEY is missing")
+
+    url = f"{DASHBOARD_URL}/api/public/verify/start"
+    payload = {
+        "discord_id": str(member.id),
+        "discord_username": str(member),
+        "guild_id": str(guild.id),
+    }
+
+    try:
+        async with bot.session.post(
+            url,
+            json=payload,
+            headers={"x-bot-key": SYNC_KEY},
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as resp:
+            raw = await resp.text()
+            content_type = resp.headers.get("content-type", "")
+            print(f"[verify] POST {url} -> HTTP {resp.status} ({content_type})")
+            if raw:
+                print(f"[verify] dashboard response: {raw[:1500]}")
+
+            try:
+                data = await resp.json(content_type=None)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"dashboard returned non-JSON HTTP {resp.status}: {raw[:500]}"
+                ) from exc
+
+            if resp.status != 200:
+                raise RuntimeError(f"dashboard returned HTTP {resp.status}: {data}")
+
+            if not isinstance(data, dict) or not data.get("ok") or not data.get("url"):
+                message = data.get("error") if isinstance(data, dict) else None
+                raise RuntimeError(
+                    f"dashboard verification failed: {message or data}"
+                )
+
+            return str(data["url"])
+    except aiohttp.ClientError as exc:
+        raise RuntimeError(f"dashboard request failed: {exc}") from exc
+
+
+class VerifyStartView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=300)
 
@@ -56,7 +109,7 @@ verification = r'''class VerifyStartView(discord.ui.View):
         except Exception as exc:
             print(f"[verify] failed: {exc}")
             return await interaction.response.send_message(
-                "I couldn't create the dashboard link. Check BOT_SYNC_KEY and DASHBOARD_URL.",
+                "I couldn't create the dashboard link. Check the VPS/dashboard configuration.",
                 ephemeral=True,
             )
         view = discord.ui.View(timeout=600)
@@ -101,7 +154,7 @@ async def slash_verify(interaction: discord.Interaction):
     except Exception as exc:
         print(f"[verify] failed: {exc}")
         return await interaction.response.send_message(
-            "I couldn't create the dashboard link. Check BOT_SYNC_KEY and DASHBOARD_URL.",
+            "I couldn't create the dashboard link. Check the VPS/dashboard configuration.",
             ephemeral=True,
         )
     view = discord.ui.View(timeout=600)
