@@ -1,9 +1,13 @@
+import { json, ownedServers, sessionUser } from '../_auth'
+
 export default async function handler(req:any,res:any){
-  if(req.method!=='GET')return res.status(405).json({error:'Method not allowed'})
-  // Discord OAuth should replace this demo adapter once DISCORD_CLIENT_ID/SECRET are configured.
-  res.status(200).json([
-    {id:'100001',name:'RM Community',icon:'RM',members:12480,online:true,manageable:true},
-    {id:'100002',name:'Night Shift',icon:'NS',members:5810,online:true,manageable:true},
-    {id:'100003',name:'Gaming Hub',icon:'GH',members:2220,online:false,manageable:false}
-  ])
+  if(req.method!=='GET') return json(res,405,{ok:false,error:'Method not allowed'})
+  try{
+    const auth=await sessionUser(req)
+    if(!auth) return json(res,401,{ok:false,error:'Authentication required'})
+    return json(res,200,{ok:true,servers:await ownedServers(auth.user.discord_id)})
+  }catch(error){
+    console.error('[dashboard/servers]',error)
+    return json(res,500,{ok:false,error:'Could not load servers'})
+  }
 }
