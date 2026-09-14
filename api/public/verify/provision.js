@@ -5,11 +5,11 @@ function send(res, status, body) {
   res.end(JSON.stringify(body))
 }
 
-function token(bytes = 32) {
+function randomHex(bytes = 32) {
   return crypto.randomBytes(bytes).toString('hex')
 }
 
-function passwordHash(password, salt = token(16)) {
+function passwordHash(password, salt = randomHex(16)) {
   const derived = crypto.scryptSync(password, salt, 64).toString('hex')
   return `scrypt:${salt}:${derived}`
 }
@@ -24,14 +24,16 @@ async function supabase(path, init = {}) {
     headers: {
       apikey: key,
       Authorization: `Bearer ${key}`,
-      Prefer: 'return=representation',
       ...(init.headers || {}),
     },
   })
 
   const text = await response.text()
-  if (!response.ok) throw new Error(`Supabase ${response.status}: ${text.slice(0, 500)}`)
-  return text ? JSON.parse(text) : []
+  if (!response.ok) {
+    throw new Error(`Supabase ${response.status}: ${text.slice(0, 700)}`)
+  }
+  if (!text) return []
+  try { return JSON.parse(text) } catch { return text }
 }
 
 function generateUsername(discordId) {
@@ -39,7 +41,7 @@ function generateUsername(discordId) {
 }
 
 function generatePassword() {
-  return crypto.randomBytes(12).toString('base64url')
+  return randomHex(12)
 }
 
 export default async function handler(req, res) {
@@ -70,8 +72,7 @@ export default async function handler(req, res) {
     const existingRows = await supabase(
       `dashboard_users?discord_id=eq.${encodeURIComponent(discordId)}&select=id,username,discord_username&limit=1`
     )
-    let user = Array.isArray(existingRows) ? existingRows[0] : existingRows
-
+    let user = Array.isArray(existingRows) ? existingRows[0] : null
     const username = user?.username || generateUsername(discordId)
     const password = generatePassword()
     const hashed = passwordHash(password)
@@ -83,9 +84,10 @@ export default async function handler(req, res) {
           discord_username: discordUsername || user.discord_username,
           password_hash: hashed,
         }),
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
       })
-      user = Array.isArray(updated) ? updated[0] : updated
+      const updatedUser = Array.isArray(updated) ? updated[0] : null
+      if (updatedUser?.id) user = updatedUser
     } else {
       const created = await supabase('dashboard_users', {
         method: 'POST',
@@ -95,45 +97,34 @@ export default async function handler(req, res) {
           username,
           password_hash: hashed,
         }),
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
       })
-      user = Array.isArray(created) ? created[0] : created
+      user = Array.isArray(created) ? created[0] : null
     }
 
-    if (!user?.id) throw new Error('Could not create dashboard user')
+    if (!user?.id) throw new Error('Could not create or update dashboard user')
 
-    await supabase('dashboard_memberships', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: user.id, server_id: guildId, role: 'owner' }),
-      headers: {
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=representation',
+    // Idempotent membership: the same administrator can verify multiple servers
+    // without creating duplicate membership rows.
+    await supabase(
+      `dashboard_memberships?on_conflict=user_id%2Cserver_id`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ user_id: user.id, server_id: guildId, role: 'owner' }),
+        headers: {
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        },
       },
-    })
+    )
 
-    // Rotate sessions when credentials are regenerated, then issue a fresh session.
-    await supabase(`dashboard_sessions?user_id=eq.${encodeURIComponent(user.id)}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-    })
-
-    const sessionToken = token(32)
-    const expiresAt = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString()
-    await supabase('dashboard_sessions', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: user.id,
-        token_hash: requireHash(sessionToken),
-        expires_at: expiresAt,
-      }),
-      headers: { 'Content-Type': 'application/json' },
-    })
-
+    // Do NOT create a dashboard session here. The administrator receives the
+    // generated credentials and logs in normally; the login endpoint creates
+    // the persistent 180-day session and the browser remembers it.
     return send(res, 200, {
       ok: true,
       username: user.username || username,
       password,
-      expires_at: expiresAt,
       server: { id: guildId, name: guildName || 'Discord server' },
     })
   } catch (error) {
@@ -141,11 +132,7 @@ export default async function handler(req, res) {
     return send(res, 500, {
       ok: false,
       error: 'Could not create dashboard credentials',
-      detail: process.env.NODE_ENV === 'development' ? String(error?.message || error) : undefined,
+      detail: String(error?.message || error),
     })
   }
-}
-
-function requireHash(value) {
-  return crypto.createHash('sha256').update(value).digest('hex')
 }
