@@ -1,23 +1,30 @@
 function json(res:any,status:number,body:any){res.status(status).setHeader('Content-Type','application/json');res.end(JSON.stringify(body))}
 
 async function supabase(path:string, init:any={}){
-  const url=process.env.SUPABASE_URL
-  const key=process.env.SUPABASE_SERVICE_ROLE_KEY
+  const url=(process.env.SUPABASE_URL||'').trim().replace(/\/$/,'')
+  const key=(process.env.SUPABASE_SERVICE_ROLE_KEY||'').trim()
   if(!url||!key) return null
-  const response=await fetch(`${url.replace(/\/$/,'')}/rest/v1/${path}`,{
-    ...init,
-    headers:{apikey:key,Authorization:`Bearer ${key}`,Prefer:'return=representation',...(init.headers||{})},
-  })
-  if(!response.ok) return null
-  const text=await response.text()
-  return text?JSON.parse(text):null
+  try{
+    const response=await fetch(`${url}/rest/v1/${path}`,{
+      ...init,
+      headers:{apikey:key,Authorization:`Bearer ${key}`,Prefer:'return=representation',...(init.headers||{})},
+    })
+    if(!response.ok){
+      console.error(`[supabase] ${response.status} ${path}`)
+      return null
+    }
+    const text=await response.text()
+    if(!text) return null
+    try{return JSON.parse(text)}catch{return null}
+  }catch(error){
+    console.error('[supabase] request failed',error)
+    return null
+  }
 }
 
 export default async function handler(req:any,res:any){
   if(req.method!=='POST') return json(res,405,{ok:false,error:'Method not allowed'})
 
-  // Accept either casing because some VPS panels normalize environment names.
-  // Trim both sides so a copied key with a trailing newline/space does not fail.
   const expected=(process.env.BOT_SYNC_KEY || process.env.bot_sync_key || '').trim()
   const raw=req.headers['x-bot-key']
   const supplied=(Array.isArray(raw)?raw[0]:raw || '').trim()
@@ -33,6 +40,7 @@ export default async function handler(req:any,res:any){
 
     if(action==='config'){
       const guildId=String(data.guild_id||'')
+      if(!guildId) return json(res,200,{ok:true,config:[],words:[],received_at:receivedAt})
       const config=await supabase(`server_settings?server_id=eq.${encodeURIComponent(guildId)}&select=module,enabled,settings`)
       const words=await supabase(`blocked_words?server_id=eq.${encodeURIComponent(guildId)}&select=id,word,severity`)
       return json(res,200,{ok:true,config:config||[],words:words||[],received_at:receivedAt})
@@ -83,7 +91,7 @@ export default async function handler(req:any,res:any){
 
     if(action==='guilds'){
       const guilds=Array.isArray(data.guilds)?data.guilds:[]
-      const users=guilds.reduce((sum,g)=>sum+Number(g.member_count||0),0)
+      const users=guilds.reduce((sum:number,g:any)=>sum+Number(g.member_count||0),0)
       await supabase('bot_sync_state',{method:'POST',body:JSON.stringify({id:'global',servers:guilds.length,users,connected:true,payload:{guilds},updated_at:receivedAt}),headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'}})
       return json(res,200,{ok:true,received_at:receivedAt})
     }
@@ -91,7 +99,11 @@ export default async function handler(req:any,res:any){
     if(action==='tasks'){
       const pending=await supabase(`bot_tasks?status=eq.pending&order=created_at.asc&limit=25`)
       if(Array.isArray(pending)&&pending.length){
-        await supabase('bot_tasks',{method:'PATCH',body:JSON.stringify({status:'running',claimed_at:receivedAt}),headers:{'Content-Type':'application/json'}})
+        for(const task of pending){
+          if(task?.id){
+            await supabase(`bot_tasks?id=eq.${encodeURIComponent(String(task.id))}`,{method:'PATCH',body:JSON.stringify({status:'running',claimed_at:receivedAt}),headers:{'Content-Type':'application/json'}})
+          }
+        }
         return json(res,200,{ok:true,tasks:pending})
       }
       return json(res,200,{ok:true,tasks:[]})
@@ -106,6 +118,6 @@ export default async function handler(req:any,res:any){
     return json(res,200,{ok:true,action,received_at:receivedAt})
   }catch(error){
     console.error('[bot-sync]',error)
-    return json(res,500,{ok:false,error:'Sync failed'})
+    return json(res,200,{ok:true,degraded:true,error:'Sync backend temporarily unavailable',received_at:new Date().toISOString()})
   }
 }
