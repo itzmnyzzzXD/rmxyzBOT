@@ -1,24 +1,33 @@
 """RM VPS launcher.
 
-The full bot source lives in the last known-good GitHub revision. This tiny
-launcher keeps Wispbyte from running a damaged local copy and applies the
-production dashboard fixes before starting RM.
+Fetches the last known-good bot core and applies the dashboard verification
+patch. Environment values are normalized so Wispbyte variable casing and
+accidental surrounding whitespace do not break the dashboard bridge.
 """
 
 from __future__ import annotations
 
+import os
 import urllib.request
 
 SOURCE_URL = "https://raw.githubusercontent.com/itzmnyzzzXD/rmxyzBOT/95f7ac7ac990a1c44e2c58eef1635da13197fb58/bot.py"
 
+# Normalize the sync key before the fetched bot reads it.
+key = (os.getenv("BOT_SYNC_KEY") or os.getenv("bot_sync_key") or "").strip()
+if key:
+    os.environ["BOT_SYNC_KEY"] = key
+
+# Keep the dashboard URL configurable, but provide the production default.
+dash = (os.getenv("DASHBOARD_URL") or os.getenv("dashboard_url") or "https://rmxyz.vercel.app").strip().rstrip("/")
+os.environ["DASHBOARD_URL"] = dash
+
 with urllib.request.urlopen(SOURCE_URL, timeout=20) as response:
     code = response.read().decode("utf-8")
 
-# Keep existing Wispbyte configurations working whether the variable was
-# entered as BOT_SYNC_KEY or bot_sync_key.
+# Patch the known-good source so both common Wispbyte key spellings work.
 code = code.replace(
     'SYNC_KEY = os.getenv("BOT_SYNC_KEY", "")',
-    'SYNC_KEY = os.getenv("BOT_SYNC_KEY") or os.getenv("bot_sync_key") or ""',
+    'SYNC_KEY = (os.getenv("BOT_SYNC_KEY") or os.getenv("bot_sync_key") or "").strip()',
     1,
 )
 
@@ -55,14 +64,13 @@ verification = r'''class VerifyStartView(discord.ui.View):
                                         style=discord.ButtonStyle.link))
         await interaction.response.send_message(
             embed=embed(
-                "Your server ownership/management permission was verified. "
-                "Open the dashboard and create your username and password. No email is required.",
+                "Your Discord permissions were verified. Open the dashboard and create your username and password. No email is required.",
                 "RM Dashboard Verification"),
             view=view, ephemeral=True)
 
 
 class Verification(commands.Cog):
-    """Dashboard account onboarding."""
+    """Dashboard account onboarding without email."""
 
     @commands.command(name="verify", aliases=["verifyaccount", "panel"])
     @commands.guild_only()
@@ -73,8 +81,7 @@ class Verification(commands.Cog):
                 mention_author=False)
         await ctx.reply(
             embed=embed(
-                "Your Discord permissions check out. Press the button to create your RM dashboard account. "
-                "You only need a dashboard username and password — no email.",
+                "Press the button to create your RM dashboard account. You only need a dashboard username and password — no email.",
                 "RM Verification"),
             view=VerifyStartView(), mention_author=False)
 
