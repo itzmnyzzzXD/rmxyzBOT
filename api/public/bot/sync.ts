@@ -15,9 +15,16 @@ async function supabase(path:string, init:any={}){
 
 export default async function handler(req:any,res:any){
   if(req.method!=='POST') return json(res,405,{ok:false,error:'Method not allowed'})
-  const expected=process.env.BOT_SYNC_KEY
-  const supplied=req.headers['x-bot-key']
-  if(!expected || supplied!==expected) return json(res,401,{ok:false,error:'Invalid sync key'})
+
+  // Accept either casing because some VPS panels normalize environment names.
+  // Trim both sides so a copied key with a trailing newline/space does not fail.
+  const expected=(process.env.BOT_SYNC_KEY || process.env.bot_sync_key || '').trim()
+  const raw=req.headers['x-bot-key']
+  const supplied=(Array.isArray(raw)?raw[0]:raw || '').trim()
+  if(!expected || !supplied || supplied!==expected){
+    return json(res,401,{ok:false,error:'Invalid sync key'})
+  }
+
   try{
     const body=typeof req.body==='string'?JSON.parse(req.body):req.body||{}
     const action=String(body.action||'heartbeat')
@@ -82,11 +89,10 @@ export default async function handler(req:any,res:any){
     }
 
     if(action==='tasks'){
-      const tasks=await supabase(`bot_tasks?status=eq.pending&order=created_at.asc&limit=25`)
-      if(Array.isArray(tasks)&&tasks.length){
-        const ids=tasks.map((t:any)=>t.id)
+      const pending=await supabase(`bot_tasks?status=eq.pending&order=created_at.asc&limit=25`)
+      if(Array.isArray(pending)&&pending.length){
         await supabase('bot_tasks',{method:'PATCH',body:JSON.stringify({status:'running',claimed_at:receivedAt}),headers:{'Content-Type':'application/json'}})
-        return json(res,200,{ok:true,tasks})
+        return json(res,200,{ok:true,tasks:pending})
       }
       return json(res,200,{ok:true,tasks:[]})
     }
