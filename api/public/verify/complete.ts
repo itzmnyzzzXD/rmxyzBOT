@@ -21,11 +21,11 @@ export default async function handler(req:any,res:any){
 
     let user:any=Array.isArray(existing)?existing.find((x:any)=>String(x.discord_id)===String(record.discord_id)):null
     if(user){
-      const updated=await supabase(`dashboard_users?id=eq.${encodeURIComponent(user.id)}`,{method:'PATCH',body:JSON.stringify({username,password_hash:passwordHash(password),discord_username:record.discord_username,email:record.email}),headers:{'Content-Type':'application/json'}})
+      const updated=await supabase(`dashboard_users?id=eq.${encodeURIComponent(user.id)}`,{method:'PATCH',body:JSON.stringify({username,password_hash:passwordHash(password),discord_username:record.discord_username}),headers:{'Content-Type':'application/json'}})
       user=Array.isArray(updated)?updated[0]:updated
     }else{
       const created=await supabase('dashboard_users',{method:'POST',body:JSON.stringify({
-        discord_id:record.discord_id,discord_username:record.discord_username,username,password_hash:passwordHash(password),email:record.email,
+        discord_id:record.discord_id,discord_username:record.discord_username,username,password_hash:passwordHash(password),
       }),headers:{'Content-Type':'application/json'}})
       user=Array.isArray(created)?created[0]:created
     }
