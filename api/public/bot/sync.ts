@@ -4,7 +4,7 @@ async function supabase(path:string, init:any={}){
   const url=process.env.SUPABASE_URL
   const key=process.env.SUPABASE_SERVICE_ROLE_KEY
   if(!url||!key) return null
-  const response=await fetch(`${url.replace(/\\/$/,'')}/rest/v1/${path}`,{
+  const response=await fetch(`${url.replace(/\/$/,'')}/rest/v1/${path}`,{
     ...init,
     headers:{apikey:key,Authorization:`Bearer ${key}`,Prefer:'return=representation',...(init.headers||{})},
   })
@@ -81,8 +81,21 @@ export default async function handler(req:any,res:any){
       return json(res,200,{ok:true,received_at:receivedAt})
     }
 
-    if(action==='tasks') return json(res,200,{ok:true,tasks:[]})
-    if(action==='task_done') return json(res,200,{ok:true})
+    if(action==='tasks'){
+      const tasks=await supabase(`bot_tasks?status=eq.pending&order=created_at.asc&limit=25`)
+      if(Array.isArray(tasks)&&tasks.length){
+        const ids=tasks.map((t:any)=>t.id)
+        await supabase('bot_tasks',{method:'PATCH',body:JSON.stringify({status:'running',claimed_at:receivedAt}),headers:{'Content-Type':'application/json'}})
+        return json(res,200,{ok:true,tasks})
+      }
+      return json(res,200,{ok:true,tasks:[]})
+    }
+
+    if(action==='task_done'){
+      const id=String(data.id||'')
+      if(id) await supabase(`bot_tasks?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({status:data.error?'failed':'completed',error:data.error||null,completed_at:receivedAt}),headers:{'Content-Type':'application/json'}})
+      return json(res,200,{ok:true})
+    }
 
     return json(res,200,{ok:true,action,received_at:receivedAt})
   }catch(error){
