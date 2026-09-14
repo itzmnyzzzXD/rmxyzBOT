@@ -43,8 +43,10 @@ export async function sessionUser(req:any){
   const users=await supabase(`dashboard_users?id=eq.${encodeURIComponent(session.user_id)}&select=id,discord_id,discord_username,username,email,created_at`)
   const user=Array.isArray(users)?users[0]:users
   if(!user) return null
-  await supabase(`dashboard_sessions?id=eq.${encodeURIComponent(session.id)}`,{method:'PATCH',body:JSON.stringify({last_seen_at:new Date().toISOString()}),headers:{'Content-Type':'application/json'}})
-  return {session,user}
+  const now=new Date().toISOString()
+  const refreshedExpiry=new Date(Date.now()+180*24*60*60*1000).toISOString()
+  await supabase(`dashboard_sessions?id=eq.${encodeURIComponent(session.id)}`,{method:'PATCH',body:JSON.stringify({last_seen_at:now,expires_at:refreshedExpiry}),headers:{'Content-Type':'application/json'}})
+  return {session:{...session,expires_at:refreshedExpiry},user}
 }
 
 export async function ownedServers(discordId:string){
