@@ -7,7 +7,7 @@ RM is a Discord moderation + security bot with a Vercel-ready React dashboard. `
 - React + TypeScript + Vite
 - Lucide React
 - Vercel serverless API routes
-- Optional Supabase PostgreSQL backend
+- Upstash Redis for persistent dashboard data, sessions, settings, tasks and bot sync state
 - Python `discord.py` bot
 
 ## Run the dashboard
@@ -29,31 +29,30 @@ cp .env.example .env
 python3 bot.py
 ```
 
-Set `DISCORD_BOT_TOKEN`, `BOT_SYNC_KEY`, and `DASHBOARD_URL`. The existing bot already posts to `/api/public/bot/sync` with `x-bot-key`; do not rewrite the bot to make the dashboard work.
+Set `DISCORD_BOT_TOKEN`, `BOT_SYNC_KEY`, and `DASHBOARD_URL`. The existing bot posts to `/api/public/bot/sync` with `x-bot-key`.
 
 ## Vercel
 
 Import this repository into Vercel. The included `vercel.json` uses `npm run build`, serves `dist`, and rewrites non-API routes to the Vite SPA entrypoint.
 
-Set these Vercel environment variables:
+Connect an Upstash Redis database to the Vercel project and provide these environment variables:
 
 ```text
 BOT_SYNC_KEY
 DISCORD_CLIENT_ID
 DISCORD_CLIENT_SECRET
-SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
-SESSION_SECRET
+UPSTASH_REDIS_REST_URL
+UPSTASH_REDIS_REST_TOKEN
 DASHBOARD_URL
 ```
 
-Never place bot tokens, `BOT_SYNC_KEY`, `SESSION_SECRET`, or the Supabase service-role key in frontend code.
+The Redis credentials are server-side only. Never put them in frontend code.
 
-## Supabase
+## Redis storage
 
-Run `supabase/schema.sql` in the Supabase SQL editor. The API uses server-side REST requests and the service role key only inside Vercel functions. The browser never receives the service-role key.
+The dashboard uses Redis instead of Supabase. User accounts, 180-day sessions, server configuration, blocked words, bot sync state, moderation cases, audit events and dashboard tasks are stored under the `rm:` key namespace.
 
-The schema covers bot sync state, server settings, blocked words, moderation cases, audit logs, warnings, tickets, custom commands, autoresponses and trust entries. More modules can use the same server-scoped pattern.
+No SQL setup is required.
 
 ## Bot sync contract
 
@@ -72,15 +71,11 @@ Body:
 { "action": "heartbeat", "data": { "server_count": 142, "member_count": 218400 } }
 ```
 
-Supported adapters include `config`, `case`, `event`, `security_event`, `stats`, `heartbeat`, and `status`. Unknown actions return an acknowledged response so the bot can evolve without requiring a dashboard rewrite.
+Supported adapters include `config`, `case`, `event`, `security_event`, `stats`, `heartbeat`, `status`, `guilds`, `tasks` and `task_done`.
 
 ## Authentication
 
-The UI includes the server-selector architecture and a fail-closed mutation boundary. Discord OAuth/session middleware should be connected before enabling real admin mutations. Never trust the frontend for permission decisions.
-
-## Demo/live behavior
-
-The dashboard has clearly labeled fallback values so it stays useful while credentials are missing. Live bot values replace them automatically when the backend can read `bot_sync_state`.
+Dashboard login uses username/password and server-side Redis sessions. The test administrator account is `admin` / `admin` as requested. Normal dashboard accounts are provisioned through the Discord `/verify` or `rm!verify` flow.
 
 ## Routes
 
@@ -90,4 +85,4 @@ Dashboard: `/dashboard`, `/dashboard/moderation`, `/dashboard/automod`, `/dashbo
 
 ## Safety boundary
 
-The dashboard mutation API deliberately returns `401` until proper Discord OAuth and session validation are wired in. This prevents a public Vercel deployment from turning demo controls into unauthenticated moderation actions.
+Dashboard permissions are enforced server-side. Admin sessions can view all synced Discord servers; normal users are limited to their owned servers.
