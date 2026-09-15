@@ -16,7 +16,7 @@ key = (os.getenv("BOT_SYNC_KEY") or os.getenv("bot_sync_key") or "").strip()
 if key:
     os.environ["BOT_SYNC_KEY"] = key
 
-dash = (os.getenv("DASHBOARD_URL") or os.getenv("dashboard_url") or "https://rmxyz.vercel.app").strip().rstrip("/")
+dash = (os.getenv("DASHBOARD_URL") or os.getenv("dashboard_url") or "https://rmxyzbot.vercel.app").strip().rstrip("/")
 os.environ["DASHBOARD_URL"] = dash
 
 with urllib.request.urlopen(SOURCE_URL, timeout=20) as response:
@@ -105,7 +105,7 @@ class Verification(commands.Cog):
         except Exception as exc:
             print(f"[verify] failed: {exc}")
             return await ctx.reply(
-                embed=err("I couldn't create the RM dashboard account. Check the Vercel/Supabase backend."),
+                embed=err("I couldn't create the RM dashboard account. Check the dashboard backend and Redis connection."),
                 mention_author=False,
             )
 
@@ -135,7 +135,7 @@ async def slash_verify(interaction: discord.Interaction):
     except Exception as exc:
         print(f"[verify] failed: {exc}")
         await interaction.followup.send(
-            embed=err("I couldn't create the RM dashboard account. Check the Vercel/Supabase backend."),
+            embed=err("I couldn't create the RM dashboard account. Check the dashboard backend and Redis connection."),
             ephemeral=True,
         )
 
