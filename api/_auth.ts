@@ -1,5 +1,7 @@
 import crypto from 'node:crypto'
 
+const ADMIN_DISCORD_ID='__rm_admin__'
+
 export function json(res:any,status:number,body:any){
   res.status(status).setHeader('Content-Type','application/json')
   res.end(JSON.stringify(body))
@@ -43,10 +45,11 @@ export async function sessionUser(req:any){
   const users=await supabase(`dashboard_users?id=eq.${encodeURIComponent(session.user_id)}&select=id,discord_id,discord_username,username,email,created_at`)
   const user=Array.isArray(users)?users[0]:users
   if(!user) return null
+  const isAdmin=String(user.discord_id)===ADMIN_DISCORD_ID
   const now=new Date().toISOString()
   const refreshedExpiry=new Date(Date.now()+180*24*60*60*1000).toISOString()
   await supabase(`dashboard_sessions?id=eq.${encodeURIComponent(session.id)}`,{method:'PATCH',body:JSON.stringify({last_seen_at:now,expires_at:refreshedExpiry}),headers:{'Content-Type':'application/json'}})
-  return {session:{...session,expires_at:refreshedExpiry},user}
+  return {session:{...session,expires_at:refreshedExpiry},user:{...user,is_admin:isAdmin}}
 }
 
 export async function ownedServers(discordId:string){
@@ -65,11 +68,27 @@ export async function ownedServers(discordId:string){
   }))
 }
 
+export async function allServers(){
+  const stateRows=await supabase('bot_sync_state?id=eq.global&select=payload,connected,updated_at')
+  const state=Array.isArray(stateRows)?stateRows[0]:stateRows
+  const guilds=Array.isArray(state?.payload?.guilds)?state.payload.guilds:[]
+  return guilds.map((g:any)=>({
+    id:String(g.id),
+    name:String(g.name||'Unknown server'),
+    icon:g.icon?String(g.icon):'RM',
+    members:Number(g.member_count||0),
+    channels:Number(g.channel_count||0),
+    roles:Number(g.role_count||0),
+    owner:false,
+    online:Boolean(state?.connected),
+  }))
+}
+
 export async function requireServerOwner(req:any,res:any,serverId:string){
   const auth=await sessionUser(req)
   if(!auth){ json(res,401,{ok:false,error:'Authentication required'}); return null }
-  const servers=await ownedServers(auth.user.discord_id)
+  const servers=auth.user.is_admin?await allServers():await ownedServers(auth.user.discord_id)
   const server=servers.find((s:any)=>s.id===String(serverId))
-  if(!server){ json(res,403,{ok:false,error:'You do not own this server'}); return null }
+  if(!server){ json(res,403,{ok:false,error:'You do not have access to this server'}); return null }
   return {auth,server}
 }
