@@ -3,6 +3,7 @@ import re
 import time
 import sqlite3
 import asyncio
+import io
 from collections import defaultdict, deque
 from datetime import datetime, timezone, timedelta
 
@@ -167,10 +168,9 @@ LINK_DOMAIN_RE = re.compile(r'(?:https?://|www\.)(?:[^/]+)', re.I)
 message_buckets = defaultdict(lambda: deque())
 duplicate_buckets = defaultdict(lambda: deque())
 raid_join_buckets = defaultdict(lambda: deque())
+chatted_sessions = {}
 
 DEFAULT_BAD_WORDS = {
-    # Keep this list intentionally conservative. Add your server-specific slurs
-    # with -filter add <word>. Matching is case-insensitive and punctuation-aware.
     'examplebadword',
 }
 
@@ -303,6 +303,138 @@ class ReactionRoleView(discord.ui.View):
             await interaction.response.send_message('I could not update that role.', ephemeral=True)
 
 # -----------------------------
+# Chatted relay
+# -----------------------------
+
+async def is_bot_owner(user: discord.User) -> bool:
+    if OWNER_ID and user.id == OWNER_ID:
+        return True
+    try:
+        return await bot.is_owner(user)
+    except Exception:
+        return False
+
+
+def resolve_text_channel(guild: discord.Guild, raw: str):
+    raw = raw.strip()
+    match = re.fullmatch(r'<#(\d+)>', raw)
+    if match:
+        return guild.get_channel(int(match.group(1)))
+    if raw.isdigit():
+        return guild.get_channel(int(raw))
+    name = raw.lstrip('#').strip().casefold()
+    matches = [channel for channel in guild.text_channels if channel.name.casefold() == name]
+    return matches[0] if len(matches) == 1 else None
+
+
+@bot.command()
+async def chatted(ctx):
+    if ctx.guild is None:
+        return await ctx.reply('Use `-chatted` inside a server.')
+
+    authorized = ctx.author.id == ctx.guild.owner_id or await is_bot_owner(ctx.author)
+    if not authorized:
+        return await ctx.reply('Only the server owner or bot owner can use `-chatted`.')
+
+    if ctx.author.id in chatted_sessions:
+        return await ctx.reply('You already have a `-chatted` session running.')
+
+    try:
+        await ctx.author.send(
+            embed=discord.Embed(
+                title='Chatted',
+                description=(
+                    f'Pick a channel from **{ctx.guild.name}** by sending its mention, ID, or exact name.\n\n'
+                    '**Examples:** `#general`, `<#123456789>`, `123456789`\n\n'
+                    'Type `CANCEL` to stop.'
+                ),
+                color=discord.Color.blurple()
+            )
+        )
+    except discord.Forbidden:
+        return await ctx.reply('I cannot DM you. Enable DMs for this server and try again.')
+
+    def dm_check(message: discord.Message):
+        return message.author.id == ctx.author.id and message.guild is None
+
+    try:
+        selection = await bot.wait_for('message', check=dm_check, timeout=120)
+        selected_text = selection.content.strip()
+        if selected_text.casefold() in {'cancel', 'done'}:
+            return await ctx.author.send('Chatted setup cancelled.')
+
+        target = resolve_text_channel(ctx.guild, selected_text)
+        if not isinstance(target, discord.TextChannel):
+            return await ctx.author.send('I could not find that text channel. Send the channel mention, ID, or exact name.')
+
+        me = ctx.guild.me
+        if me is None:
+            return await ctx.author.send('I could not verify my permissions in that server.')
+        permissions = target.permissions_for(me)
+        if not permissions.view_channel or not permissions.send_messages:
+            return await ctx.author.send(f'I cannot send messages in {target.mention}. Give me **View Channel** and **Send Messages** there.')
+
+        chatted_sessions[ctx.author.id] = {
+            'guild_id': ctx.guild.id,
+            'channel_id': target.id,
+        }
+
+        await ctx.author.send(
+            embed=discord.Embed(
+                title='Chatted is live',
+                description=(
+                    f'Messages you send here will be sent to {target.mention}.\n\n'
+                    'Send as many messages/images/files as you want.\n'
+                    'Type **DONE** to finish or **CANCEL** to cancel.'
+                ),
+                color=discord.Color.green()
+            )
+        )
+
+        while True:
+            message = await bot.wait_for('message', check=dm_check, timeout=900)
+            content = message.content.strip()
+
+            if content.casefold() == 'done':
+                await ctx.author.send('Chatted session ended.')
+                break
+            if content.casefold() == 'cancel':
+                await ctx.author.send('Chatted session cancelled.')
+                break
+
+            files = []
+            for attachment in message.attachments:
+                try:
+                    data = await attachment.read()
+                    files.append(discord.File(io.BytesIO(data), filename=attachment.filename))
+                except (discord.HTTPException, OSError):
+                    await ctx.author.send(f'I could not read `{attachment.filename}`.')
+
+            if not content and not files:
+                await ctx.author.send('That message was empty. Send text, an image, or a file.')
+                continue
+
+            try:
+                await target.send(content=message.content or None, files=files)
+                try:
+                    await message.add_reaction('✅')
+                except discord.HTTPException:
+                    pass
+            except discord.Forbidden:
+                await ctx.author.send('I lost permission to send messages in the target channel. Session ended.')
+                break
+            except discord.HTTPException as error:
+                await ctx.author.send(f'I could not send that message: `{error}`')
+
+    except asyncio.TimeoutError:
+        try:
+            await ctx.author.send('Chatted session timed out after 15 minutes of inactivity.')
+        except discord.HTTPException:
+            pass
+    finally:
+        chatted_sessions.pop(ctx.author.id, None)
+
+# -----------------------------
 # Bot lifecycle
 # -----------------------------
 
@@ -311,7 +443,6 @@ async def setup_hook():
     init_db()
     for guild in bot.guilds:
         ensure_guild(guild.id)
-    # Persistent buttons for existing reaction-role messages.
     conn = db()
     rows = conn.execute('SELECT role_id FROM reaction_roles').fetchall()
     conn.close()
@@ -355,8 +486,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     conn.close()
     if not row:
         return
-    emoji = str(payload.emoji)
-    if emoji != row['emoji']:
+    if str(payload.emoji) != row['emoji']:
         return
     guild = bot.get_guild(payload.guild_id)
     if not guild:
@@ -408,22 +538,18 @@ async def on_message(message: discord.Message):
     text = message.content
     normalized = normalize(text)
 
-    # 1. Discord invite protection
-    # By default this blocks Discord invite links only. Normal web links are left alone.
     if cfg['anti_links']:
         for url in URL_RE.findall(text):
             if DISCORD_INVITE_RE.search(url):
                 await punish(message, 'Discord invite link')
                 return
 
-    # 2. Slur / blocked word filter
     if cfg['anti_slurs']:
         for word in get_bad_words(message.guild.id):
             if word and re.search(rf'(?<!\w){re.escape(word)}(?!\w)', normalized):
                 await punish(message, 'Blocked word / slur filter')
                 return
 
-    # 3. Mention spam
     if cfg['anti_mentions']:
         mentions = len(message.mentions) + len(message.role_mentions)
         if message.mention_everyone:
@@ -432,14 +558,12 @@ async def on_message(message: discord.Message):
             await punish(message, f'Mention spam ({mentions} mentions)')
             return
 
-    # 4. Caps spam
     if cfg['anti_caps'] and len(text) >= 12:
         letters = [c for c in text if c.isalpha()]
         if letters and sum(c.isupper() for c in letters) / len(letters) >= 0.85:
             await punish(message, 'Excessive caps')
             return
 
-    # 5. Spam + duplicate message detection
     if cfg['anti_spam']:
         key = (message.guild.id, member.id)
         now = time.monotonic()
@@ -479,6 +603,7 @@ async def help_cmd(ctx):
     embed.add_field(name='Moderation', value='`-warn` `-warnings` `-clearwarns` `-timeout` `-kick` `-ban` `-unban` `-purge` `-lock` `-unlock` `-slowmode`', inline=False)
     embed.add_field(name='Server', value='`-setup` `-config` `-setlog` `-setmodlog` `-reactionrole` `-filter` `-whitelist`', inline=False)
     embed.add_field(name='Info', value='`-ping` `-userinfo` `-serverinfo` `-case`', inline=False)
+    embed.add_field(name='Owner', value='`-chatted` — server owner or bot owner only', inline=False)
     await ctx.send(embed=embed)
 
 
