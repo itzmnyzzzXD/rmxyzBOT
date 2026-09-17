@@ -6,3 +6,7 @@ dist
 .vite
 .DS_Store
 *.log
+*.db
+*.sqlite
+*.sqlite3
+rm_backups/
