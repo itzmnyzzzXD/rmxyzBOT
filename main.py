@@ -1,8 +1,7 @@
 """RM Bot single-entry runtime.
 
-The original bot.py remains the core runtime. rm_expansion.py registers the
-additive UI, utility, moderation workflows and private RM Core AI before the
-Discord client starts.
+bot.py is the complete runtime. The RM expansion and interactive panels are
+merged directly into bot.py, so this launcher must not import them a second time.
 """
 
 from __future__ import annotations
@@ -10,7 +9,6 @@ from __future__ import annotations
 import sys
 
 from bot import TOKEN, bot
-import rm_expansion  # noqa: F401  # registers additive commands/listeners/views
 
 
 def main() -> int:
@@ -19,7 +17,7 @@ def main() -> int:
         return 1
 
     print("[RM] Integrated runtime loading...")
-    print("[RM] Additive expansion loaded: UI + utilities + moderation + RM Core AI")
+    print("[RM] bot.py contains core + RM expansion + interactive UI")
     print("[RM] Commands: slash + configured prefix")
     print("[RM] Servers will be reported after login.")
 
