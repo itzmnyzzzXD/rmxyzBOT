@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 
 from bot import TOKEN, bot
+import interactive_fix  # noqa: F401 - hardens the shared interactive UI/error layer
 
 
 def main() -> int:
@@ -19,6 +20,7 @@ def main() -> int:
 
     print("[RM] Loading complete bot.py runtime...")
     print("[RM] Core bot + full RM expansion + interactive UI loaded")
+    print("[RM] Interactive UI hardening loaded")
     print("[RM] Commands: slash + configured prefix")
     print("[RM] Servers will be reported after login.")
 
