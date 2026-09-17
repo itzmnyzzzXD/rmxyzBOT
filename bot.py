@@ -1313,10 +1313,6 @@ async def on_app_command_error(interaction: discord.Interaction, error):
         pass
 
 
-if __name__ == "__main__":
-    bot.run(TOKEN)
-
-
 # ==================== RM PLUS ====================
 
 import os
@@ -2448,4 +2444,8 @@ async def verifychallenge(ctx, channel: discord.TextChannel = None):
     await ctx.reply(f"✅ Verification challenge deployed in {channel.mention}.")
 
 # Flattened from rm_plus.py, rm_ui.py, and rm_verify.py.
+
 VerifyView = QuestionVerifyView
+
+if __name__ == "__main__":
+    bot.run(TOKEN)
