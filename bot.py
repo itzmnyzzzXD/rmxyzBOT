@@ -1505,7 +1505,7 @@ class ConfirmView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="✓")
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="✅")
     async def confirm(self, interaction, button):
         if self.done:
             return
@@ -1513,7 +1513,7 @@ class ConfirmView(discord.ui.View):
         await self.yes_callback(interaction)
         self.stop()
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, emoji="×")
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, emoji="❌")
     async def cancel(self, interaction, button):
         self.done = True
         await interaction.response.edit_message(embed=make_embed("RM • Cancelled", "No changes were made.", PALETTE["warning"]), view=None)
@@ -1545,7 +1545,7 @@ class ConfigView(discord.ui.View):
         discord.SelectOption(label="Links", value="anti_links", emoji="🔗"),
         discord.SelectOption(label="Invites", value="anti_invites", emoji="🛡️"),
         discord.SelectOption(label="Spam", value="anti_spam", emoji="⚡"),
-        discord.SelectOption(label="Mentions", value="anti_mentions", emoji="@"),
+        discord.SelectOption(label="Mentions", value="anti_mentions", emoji="📣"),
         discord.SelectOption(label="Caps", value="anti_caps", emoji="🔠"),
         discord.SelectOption(label="Welcome", value="welcome_enabled", emoji="👋"),
         discord.SelectOption(label="Leveling", value="leveling", emoji="📈"),
@@ -1560,11 +1560,11 @@ class ConfigView(discord.ui.View):
         set_config(self.guild_id, key, new_value)
         await self.refresh(interaction, f"RM • {'Enabled' if new_value else 'Disabled'} {key}")
 
-    @discord.ui.button(label="Reload", style=discord.ButtonStyle.secondary, emoji="↻")
+    @discord.ui.button(label="Reload", style=discord.ButtonStyle.secondary, emoji="🔄")
     async def reload(self, interaction, button):
         await self.refresh(interaction)
 
-    @discord.ui.button(label="Raid Mode", style=discord.ButtonStyle.danger, emoji="⚠")
+    @discord.ui.button(label="Raid Mode", style=discord.ButtonStyle.danger, emoji="⚠️")
     async def raid(self, interaction, button):
         await interaction.response.send_message("Use the Raid Mode button only when you intentionally want to lock the server.", ephemeral=True)
 
@@ -1741,7 +1741,7 @@ class EmbedBuilderModal(discord.ui.Modal, title="RM • Embed Builder"):
 @admin_only()
 async def embedbuilder(ctx, channel: discord.TextChannel = None):
     channel = channel or ctx.channel
-    button = discord.ui.Button(label="Open Embed Builder", style=discord.ButtonStyle.primary, emoji="✦")
+    button = discord.ui.Button(label="Open Embed Builder", style=discord.ButtonStyle.primary, emoji="✨")
     view = discord.ui.View(timeout=120)
     async def open_modal(interaction):
         if interaction.user.id != ctx.author.id:
@@ -2334,9 +2334,9 @@ class HelpView(discord.ui.View):
         self.author_id = author_id
         self.page = 0
         self.page_label = discord.ui.Button(label="1 / 4", style=discord.ButtonStyle.secondary, disabled=True)
-        self.prev_button = discord.ui.Button(label="Prev", style=discord.ButtonStyle.secondary, emoji="◀")
-        self.next_button = discord.ui.Button(label="Next", style=discord.ButtonStyle.secondary, emoji="▶")
-        self.home_button = discord.ui.Button(label="Home", style=discord.ButtonStyle.primary, emoji="⌂")
+        self.prev_button = discord.ui.Button(label="Prev", style=discord.ButtonStyle.secondary, emoji="◀️")
+        self.next_button = discord.ui.Button(label="Next", style=discord.ButtonStyle.secondary, emoji="▶️")
+        self.home_button = discord.ui.Button(label="Home", style=discord.ButtonStyle.primary, emoji="🏠")
         self.prev_button.callback = self.prev
         self.next_button.callback = self.next
         self.home_button.callback = self.home
@@ -2423,7 +2423,7 @@ class QuestionVerifyView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Start Verification", style=discord.ButtonStyle.success, emoji="✓", custom_id="rm:question_verify")
+    @discord.ui.button(label="Start Verification", style=discord.ButtonStyle.success, emoji="✅", custom_id="rm:question_verify")
     async def start(self, interaction, button):
         question = get_question(interaction.guild.id) if interaction.guild else None
         if not question:
@@ -2500,12 +2500,12 @@ class ConfirmView(RMView):
         super().__init__(owner_id, 60)
         self.callback_fn = callback
 
-    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger, emoji="✓")
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger, emoji="✅")
     async def confirm(self, interaction, button):
         await self.callback_fn(interaction)
         self.stop()
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="×")
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
     async def cancel(self, interaction, button):
         await interaction.response.edit_message(embed=make_embed("RM • Cancelled", "No changes were made.", PALETTE["warning"]), view=None)
         self.stop()
@@ -2530,7 +2530,7 @@ class ControlView(RMView):
     async def community(self, interaction, button):
         await interaction.response.edit_message(embed=make_embed("RM • Community Center", "Polls, reminders, AFK, XP and utilities."), view=CommunityView(interaction.user.id))
 
-    @discord.ui.button(label="AI", style=discord.ButtonStyle.secondary, emoji="✦")
+    @discord.ui.button(label="AI", style=discord.ButtonStyle.secondary, emoji="✨")
     async def ai(self, interaction, button):
         await interaction.response.edit_message(embed=make_embed("RM Core", "Private owner-only engineering AI. Use `/core <prompt>` or `-core <prompt>`."), view=self)
 
@@ -2552,7 +2552,7 @@ class ServerView(RMView):
         conn = db(); cases = conn.execute("SELECT COUNT(*) n FROM cases WHERE guild_id=?", (interaction.guild.id,)).fetchone()["n"]; warns = conn.execute("SELECT COUNT(*) n FROM warnings WHERE guild_id=?", (interaction.guild.id,)).fetchone()["n"]; conn.close()
         await interaction.response.edit_message(embed=make_embed("RM • Server Stats", f"Cases: `{cases}`\nWarnings: `{warns}`\nLatency: `{round(bot.latency*1000)}ms`"), view=self)
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩")
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="🔙")
     async def back(self, interaction, button):
         await interaction.response.edit_message(embed=make_embed("RM • Control Center", "Choose a system."), view=ControlView(interaction.user.id))
 
@@ -2566,7 +2566,7 @@ class ModerationView(RMView):
     async def purge(self, interaction, button):
         await interaction.response.send_message("Use `/purgeui <amount>` for confirmation + animated completion.", ephemeral=True)
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩")
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="🔙")
     async def back(self, interaction, button):
         await interaction.response.edit_message(embed=make_embed("RM • Control Center", "Choose a system."), view=ControlView(interaction.user.id))
 
@@ -2578,7 +2578,7 @@ class SecurityView(RMView):
         text = f"Links `{c['anti_links']}`\nInvites `{c['anti_invites']}`\nSpam `{c['anti_spam']}`\nMentions `{c['anti_mentions']}`\nCaps `{c['anti_caps']}`\nVerification `{c['verification_enabled']}`"
         await interaction.response.edit_message(embed=make_embed("RM • Security Status", text), view=self)
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩")
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="🔙")
     async def back(self, interaction, button):
         await interaction.response.edit_message(embed=make_embed("RM • Control Center", "Choose a system."), view=ControlView(interaction.user.id))
 
@@ -2592,7 +2592,7 @@ class CommunityView(RMView):
     async def reminder(self, interaction, button):
         await interaction.response.send_message("Use `/remind 10m message`.", ephemeral=True)
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩")
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="🔙")
     async def back(self, interaction, button):
         await interaction.response.edit_message(embed=make_embed("RM • Control Center", "Choose a system."), view=ControlView(interaction.user.id))
 
@@ -3006,14 +3006,14 @@ class ControlView(SafeInteractiveView):
             view=QuickActionsView(interaction.user.id),
         )
 
-    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="↻", row=2)
+    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄", row=2)
     async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(
             embed=make_embed("RM • Control Center", "Panel refreshed. Choose a system below."),
             view=ControlView(interaction.user.id),
         )
 
-    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger, emoji="×", row=2)
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger, emoji="❌", row=2)
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.close_panel(interaction)
 
@@ -3042,7 +3042,7 @@ class ServerInteractiveView(SafeInteractiveView):
         perms = [name.replace("_", " ").title() for name, enabled in me.guild_permissions if enabled]
         await interaction.response.edit_message(embed=make_embed("RM • Bot Permissions", ", ".join(perms)[:3900] or "None"), view=self)
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩", row=1)
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="🔙", row=1)
     async def back(self, interaction, button):
         await self.home(interaction)
 
@@ -3079,7 +3079,7 @@ class SecurityInteractiveView(SafeInteractiveView):
             view=self,
         )
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩", row=1)
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="🔙", row=1)
     async def back(self, interaction, button):
         await self.home(interaction)
 
@@ -3094,7 +3094,7 @@ class SecurityToggleView(SafeInteractiveView):
                 discord.SelectOption(label="Links", value="anti_links", emoji="🔗"),
                 discord.SelectOption(label="Invites", value="anti_invites", emoji="📨"),
                 discord.SelectOption(label="Spam", value="anti_spam", emoji="⚡"),
-                discord.SelectOption(label="Mentions", value="anti_mentions", emoji="@"),
+                discord.SelectOption(label="Mentions", value="anti_mentions", emoji="📣"),
                 discord.SelectOption(label="Caps", value="anti_caps", emoji="🔠"),
                 discord.SelectOption(label="Slurs", value="anti_slurs", emoji="🛡️"),
             ],
@@ -3109,7 +3109,7 @@ class SecurityToggleView(SafeInteractiveView):
         set_config(self.guild_id, key, new_value)
         await interaction.response.edit_message(embed=security_overview_embed(interaction.guild), view=SecurityInteractiveView(interaction.user.id))
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩", row=1)
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="🔙", row=1)
     async def back(self, interaction, button):
         await interaction.response.edit_message(embed=security_overview_embed(interaction.guild), view=SecurityInteractiveView(interaction.user.id))
 
@@ -3140,7 +3140,7 @@ class ModerationInteractiveView(SafeInteractiveView):
     async def slowmode(self, interaction, button):
         await interaction.response.edit_message(embed=make_embed("RM • Slowmode", "Use `slowmodeall <seconds>` for the animated confirmation workflow."), view=self)
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩", row=1)
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="🔙", row=1)
     async def back(self, interaction, button):
         await self.home(interaction)
 
@@ -3162,7 +3162,7 @@ class CommunityInteractiveView(SafeInteractiveView):
     async def sticky(self, interaction, button):
         await interaction.response.edit_message(embed=make_embed("RM • Sticky", "Use `sticky <content>` and `unsticky` for channel sticky messages."), view=self)
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩", row=1)
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="🔙", row=1)
     async def back(self, interaction, button):
         await self.home(interaction)
 
@@ -3187,7 +3187,7 @@ class AnalyticsInteractiveView(SafeInteractiveView):
         humans = max(0, len(g.members) - bots)
         await interaction.response.edit_message(embed=make_embed("RM • Member Analytics", f"Humans: `{humans}`\nBots: `{bots}`\nTotal cached: `{len(g.members)}`"), view=self)
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩", row=1)
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="🔙", row=1)
     async def back(self, interaction, button):
         await self.home(interaction)
 
@@ -3202,7 +3202,7 @@ class InteractiveConfigView(SafeInteractiveView):
                 discord.SelectOption(label="Anti Links", value="anti_links", emoji="🔗"),
                 discord.SelectOption(label="Anti Invites", value="anti_invites", emoji="📨"),
                 discord.SelectOption(label="Anti Spam", value="anti_spam", emoji="⚡"),
-                discord.SelectOption(label="Anti Mentions", value="anti_mentions", emoji="@"),
+                discord.SelectOption(label="Anti Mentions", value="anti_mentions", emoji="📣"),
                 discord.SelectOption(label="Anti Caps", value="anti_caps", emoji="🔠"),
                 discord.SelectOption(label="Leveling", value="leveling", emoji="📈"),
                 discord.SelectOption(label="Welcome", value="welcome_enabled", emoji="👋"),
@@ -3221,11 +3221,11 @@ class InteractiveConfigView(SafeInteractiveView):
         set_config(self.guild_id, key, new_value)
         await interaction.response.edit_message(embed=config_overview_embed(interaction.guild), view=InteractiveConfigView(interaction.user.id, self.guild_id))
 
-    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="↻", row=1)
+    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄", row=1)
     async def refresh(self, interaction, button):
         await interaction.response.edit_message(embed=config_overview_embed(interaction.guild), view=self)
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.primary, emoji="↩", row=1)
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.primary, emoji="🔙", row=1)
     async def back(self, interaction, button):
         await self.home(interaction)
 
@@ -3247,7 +3247,7 @@ class QuickActionsView(SafeInteractiveView):
     async def moderation(self, interaction, button):
         await interaction.response.edit_message(embed=moderation_overview_embed(interaction.guild), view=ModerationInteractiveView(interaction.user.id))
 
-    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩", row=1)
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="🔙", row=1)
     async def back(self, interaction, button):
         await self.home(interaction)
 
@@ -3352,7 +3352,68 @@ SecurityView = SecurityInteractiveView
 ModerationView = ModerationInteractiveView
 CommunityView = CommunityInteractiveView
 
+# === RM FINAL INTERACTIVE ERROR HANDLER ===
+import traceback as _rm_traceback
+
+
+async def _rm_final_command_error(ctx, error):
+    original = getattr(error, "original", error)
+    command_name = getattr(getattr(ctx, "command", None), "qualified_name", "unknown")
+    print(f"[RM COMMAND ERROR] command={command_name!r} type={type(original).__name__}: {original!r}")
+    _rm_traceback.print_exception(type(original), original, original.__traceback__)
+
+    if isinstance(error, commands.CommandNotFound):
+        return
+    if isinstance(error, commands.CheckFailure):
+        message = "🚫 You don't have permission to use that."
+    elif isinstance(error, commands.MissingRequiredArgument):
+        command = getattr(ctx, "command", None)
+        signature = getattr(command, "signature", "")
+        message = f"Usage: `{PREFIX}{command.qualified_name} {signature}`" if command else "Missing required argument."
+    elif isinstance(error, commands.BadArgument):
+        message = "❌ Invalid member, role, channel, or number."
+    elif isinstance(original, discord.Forbidden):
+        message = "❌ Discord denied that action. Check my permissions and role position."
+    else:
+        message = f"❌ Command failed: `{type(original).__name__}`. The full traceback is in the VPS console."
+
+    try:
+        interaction = getattr(ctx, "interaction", None)
+        if interaction is not None:
+            if interaction.response.is_done():
+                await interaction.followup.send(message, ephemeral=True)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+        else:
+            await ctx.send(message)
+    except (discord.HTTPException, discord.NotFound):
+        pass
+    except Exception:
+        _rm_traceback.print_exc()
+
+
+async def _rm_final_app_command_error(interaction, error):
+    original = getattr(error, "original", error)
+    command_name = getattr(getattr(interaction, "command", None), "qualified_name", "unknown")
+    print(f"[RM SLASH ERROR] command={command_name!r} type={type(original).__name__}: {original!r}")
+    _rm_traceback.print_exception(type(original), original, original.__traceback__)
+    message = f"❌ Command failed: `{type(original).__name__}`. The full traceback is in the VPS console."
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
+    except (discord.HTTPException, discord.NotFound):
+        pass
+    except Exception:
+        _rm_traceback.print_exc()
+
+
+bot.on_command_error = _rm_final_command_error
+bot.tree.on_error = _rm_final_app_command_error
+
 if __name__ == "__main__":
     bot.run(TOKEN)
+
 
 
