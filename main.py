@@ -17,7 +17,7 @@ def main() -> int:
         return 1
 
     print("[RM] Integrated runtime loading...")
-    print("[RM] bot.py contains core + RM expansion + interactive UI")
+    print("[RM] bot.py contains core + RM expansion + expanded interactive UI")
     print("[RM] Commands: slash + configured prefix")
     print("[RM] Servers will be reported after login.")
 
