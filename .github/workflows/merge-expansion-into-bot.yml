@@ -1,0 +1,265 @@
+name: Integrate RM expansion into bot.py
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/merge-expansion-into-bot.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Merge expansion without dropping source code
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          bot_path = Path('bot.py')
+          expansion_path = Path('rm_expansion.py')
+          bot = bot_path.read_text(encoding='utf-8')
+          expansion = expansion_path.read_text(encoding='utf-8')
+          marker = '# === RM EXPANSION MERGED INTO BOT.PY ==='
+
+          if marker not in bot:
+              lines = expansion.splitlines()
+              out = []
+              import_replaced = False
+              for line in lines:
+                  if line.startswith('from bot import '):
+                      out.append('# Original rm_expansion import retained as a disabled provenance line after merge.')
+                      out.append(f'# {line}')
+                      out.append('if False:')
+                      out.append('    ' + line)
+                      import_replaced = True
+                  else:
+                      out.append(line)
+              if not import_replaced:
+                  raise SystemExit('Could not find the expansion bot import; refusing to make a lossy merge.')
+
+              merged = bot.rstrip() + '\n\n' + marker + '\n' + '\n'.join(out).rstrip() + '\n'
+              bot_path.write_text(merged, encoding='utf-8')
+              print('Merged rm_expansion.py into bot.py')
+          else:
+              print('Expansion already merged; preserving existing bot.py')
+          PY
+
+      - name: Add RM interactive super-panel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('bot.py')
+          s = p.read_text(encoding='utf-8')
+          marker = '# === RM INTERACTIVE SUPER PANEL ==='
+          if marker in s:
+              print('Super panel already present')
+              raise SystemExit(0)
+          extra = r'''
+
+# === RM INTERACTIVE SUPER PANEL ===
+class RMNavView(discord.ui.View):
+    def __init__(self, owner_id: int):
+        super().__init__(timeout=300)
+        self.owner_id = owner_id
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message('This panel belongs to another user.', ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label='Overview', style=discord.ButtonStyle.primary, emoji='🏠')
+    async def overview(self, interaction, button):
+        g = interaction.guild
+        e = make_embed('RM • Overview', f'**{g.name}**\nMembers: `{g.member_count}`\nChannels: `{len(g.channels)}`\nRoles: `{len(g.roles)}`\nLatency: `{round(bot.latency * 1000)}ms`')
+        await interaction.response.edit_message(embed=e, view=self)
+
+    @discord.ui.button(label='Moderation', style=discord.ButtonStyle.danger, emoji='🛡️')
+    async def moderation(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Moderation', 'Use the dedicated moderation workflows below or jump back home.'), view=RMModView(interaction.user.id))
+
+    @discord.ui.button(label='Server', style=discord.ButtonStyle.secondary, emoji='⚙️')
+    async def server(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Server Tools', 'Configuration, security, logs, welcome, verification, tickets and roles.'), view=RMServerView(interaction.user.id))
+
+    @discord.ui.button(label='Member', style=discord.ButtonStyle.success, emoji='👤')
+    async def member(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Member Tools', 'Profiles, permissions, avatar/banner, warnings and moderation actions.'), view=RMMemberView(interaction.user.id))
+
+    @discord.ui.button(label='Utilities', style=discord.ButtonStyle.secondary, emoji='🧰')
+    async def utilities(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Utilities', 'Embeds, polls, reminders, slowmode, purge, stats and help.'), view=RMUtilView(interaction.user.id))
+
+
+class RMModView(RMNavView):
+    @discord.ui.button(label='Back', style=discord.ButtonStyle.secondary, row=1, emoji='↩️')
+    async def back(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Super Panel', 'Pick a section.'), view=RMNavView(interaction.user.id))
+
+    @discord.ui.button(label='Cases', style=discord.ButtonStyle.primary, row=1, emoji='📁')
+    async def cases2(self, interaction, button):
+        await interaction.response.send_message('Run `/casebrowser` for the interactive case browser.', ephemeral=True)
+
+    @discord.ui.button(label='Purge', style=discord.ButtonStyle.danger, row=1, emoji='🧹')
+    async def purge2(self, interaction, button):
+        await interaction.response.send_message('Run `/purgeui <amount>` for the confirmation workflow.', ephemeral=True)
+
+    @discord.ui.button(label='Lockdown', style=discord.ButtonStyle.danger, row=2, emoji='🚨')
+    async def lockdown2(self, interaction, button):
+        await interaction.response.send_message('Run `/lockdown` for the protected confirmation workflow.', ephemeral=True)
+
+    @discord.ui.button(label='Nick', style=discord.ButtonStyle.secondary, row=2, emoji='✏️')
+    async def nick2(self, interaction, button):
+        await interaction.response.send_message('Run `/nick @member nickname`.', ephemeral=True)
+
+    @discord.ui.button(label='Roles', style=discord.ButtonStyle.secondary, row=2, emoji='🎭')
+    async def roles2(self, interaction, button):
+        await interaction.response.send_message('Run `/roleadd @member @role` or `/roleremove @member @role`.', ephemeral=True)
+
+
+class RMServerView(RMNavView):
+    @discord.ui.button(label='Back', style=discord.ButtonStyle.secondary, row=1, emoji='↩️')
+    async def back(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Super Panel', 'Pick a section.'), view=RMNavView(interaction.user.id))
+
+    @discord.ui.button(label='Dashboard', style=discord.ButtonStyle.primary, row=1, emoji='📊')
+    async def dashboard2(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Dashboard', f'Members `{interaction.guild.member_count}`\nChannels `{len(interaction.guild.channels)}`\nRoles `{len(interaction.guild.roles)}`\nLatency `{round(bot.latency * 1000)}ms`'), view=self)
+
+    @discord.ui.button(label='Security', style=discord.ButtonStyle.danger, row=1, emoji='🔐')
+    async def security2(self, interaction, button):
+        c = get_config(interaction.guild.id)
+        await interaction.response.edit_message(embed=make_embed('RM • Security', f'Links `{c["anti_links"]}`\nInvites `{c["anti_invites"]}`\nSpam `{c["anti_spam"]}`\nMentions `{c["anti_mentions"]}`\nVerification `{c["verification_enabled"]}`'), view=self)
+
+    @discord.ui.button(label='Health', style=discord.ButtonStyle.success, row=2, emoji='💚')
+    async def health2(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Health', f'Gateway latency: `{round(bot.latency * 1000)}ms`\nConnected guilds: `{len(bot.guilds)}`\nCached users: `{len(bot.users)}`'), view=self)
+
+    @discord.ui.button(label='Help', style=discord.ButtonStyle.secondary, row=2, emoji='❔')
+    async def help2(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Help', 'Use `/rmhelp` for a categorized interactive command browser.'), view=self)
+
+
+class RMMemberView(RMNavView):
+    @discord.ui.button(label='Back', style=discord.ButtonStyle.secondary, row=1, emoji='↩️')
+    async def back(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Super Panel', 'Pick a section.'), view=RMNavView(interaction.user.id))
+
+    @discord.ui.button(label='My Profile', style=discord.ButtonStyle.primary, row=1, emoji='👤')
+    async def me2(self, interaction, button):
+        m = interaction.user
+        await interaction.response.edit_message(embed=make_embed(f'👤 {m.display_name}', f'ID `{m.id}`\nJoined {discord.utils.format_dt(m.joined_at, "R") if m.joined_at else "Unknown"}\nTop role: {m.top_role.mention}'), view=self)
+
+    @discord.ui.button(label='Avatar', style=discord.ButtonStyle.secondary, row=1, emoji='🖼️')
+    async def avatar2(self, interaction, button):
+        e = make_embed(f'🖼️ {interaction.user.display_name}', f'[Open PNG]({interaction.user.display_avatar.with_format("png").url})')
+        e.set_image(url=interaction.user.display_avatar.url)
+        await interaction.response.edit_message(embed=e, view=self)
+
+    @discord.ui.button(label='Permissions', style=discord.ButtonStyle.secondary, row=2, emoji='🔑')
+    async def perms2(self, interaction, button):
+        perms = [n.replace('_', ' ').title() for n, v in interaction.user.guild_permissions if v]
+        await interaction.response.edit_message(embed=make_embed('🔑 Your Permissions', ', '.join(perms)[:3900] or 'None'), view=self)
+
+    @discord.ui.button(label='Warnings', style=discord.ButtonStyle.danger, row=2, emoji='⚠️')
+    async def warns2(self, interaction, button):
+        conn = db()
+        rows = conn.execute('SELECT id, reason, created_at FROM warnings WHERE guild_id=? AND user_id=? ORDER BY id DESC LIMIT 10', (interaction.guild.id, interaction.user.id)).fetchall()
+        conn.close()
+        body = '\n'.join(f'`#{r["id"]}` {r["reason"][:90]}' for r in rows) or 'No warnings.'
+        await interaction.response.edit_message(embed=make_embed('⚠️ Your Recent Warnings', body), view=self)
+
+
+class RMUtilView(RMNavView):
+    @discord.ui.button(label='Back', style=discord.ButtonStyle.secondary, row=1, emoji='↩️')
+    async def back(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Super Panel', 'Pick a section.'), view=RMNavView(interaction.user.id))
+
+    @discord.ui.button(label='Stats', style=discord.ButtonStyle.primary, row=1, emoji='📈')
+    async def stats2(self, interaction, button):
+        cfg = get_config(interaction.guild.id)
+        await interaction.response.edit_message(embed=make_embed('📈 Server Stats', f'Members `{interaction.guild.member_count}`\nText channels `{len(interaction.guild.text_channels)}`\nVoice channels `{len(interaction.guild.voice_channels)}`\nWelcome `{cfg["welcome_enabled"]}`\nLeveling `{cfg["leveling"]}`'), view=self)
+
+    @discord.ui.button(label='Commands', style=discord.ButtonStyle.secondary, row=1, emoji='⌨️')
+    async def commands2(self, interaction, button):
+        names = sorted({c.qualified_name for c in bot.walk_commands()})
+        await interaction.response.edit_message(embed=make_embed('⌨️ Commands', '\n'.join(f'`{x}`' for x in names[:80]) or 'No commands loaded.'), view=self)
+
+    @discord.ui.button(label='Server Info', style=discord.ButtonStyle.secondary, row=2, emoji='🏰')
+    async def info2(self, interaction, button):
+        g = interaction.guild
+        e = make_embed(f'🏰 {g.name}', f'Owner <@{g.owner_id}>\nCreated {discord.utils.format_dt(g.created_at, "F")}\nBoosts `{g.premium_subscription_count}`')
+        if g.icon: e.set_thumbnail(url=g.icon.url)
+        await interaction.response.edit_message(embed=e, view=self)
+
+    @discord.ui.button(label='Open Help', style=discord.ButtonStyle.success, row=2, emoji='📖')
+    async def help3(self, interaction, button):
+        await interaction.response.edit_message(embed=make_embed('RM • Help', 'Use `/rmhelp` for the full interactive browser.'), view=self)
+
+
+@bot.hybrid_command(name='rm', description='Open the full RM interactive control center.')
+async def rm_super(ctx):
+    await ctx.reply(embed=make_embed('RM • Super Panel', 'A full interactive control center for RM. Pick a section.'), view=RMNavView(ctx.author.id))
+
+
+@bot.hybrid_command(name='rmhelp', description='Open the interactive categorized help browser.')
+async def rm_help(ctx):
+    names = sorted({c.qualified_name for c in bot.walk_commands()})
+    desc = 'Use the RM panel buttons to browse tools.\n\n' + '\n'.join(f'• `{n}`' for n in names[:90])
+    await ctx.reply(embed=make_embed('RM • Command Browser', desc[:4000]), view=RMNavView(ctx.author.id))
+
+
+@bot.hybrid_command(name='rmhealth', description='Show live RM health and runtime information.')
+async def rm_health(ctx):
+    await ctx.reply(embed=make_embed('RM • Health', f'Latency `{round(bot.latency * 1000)}ms`\nGuilds `{len(bot.guilds)}`\nUsers cached `{len(bot.users)}`\nCommands `{len(set(c.qualified_name for c in bot.walk_commands()))}`\nPython runtime ready ✅'), view=RMNavView(ctx.author.id))
+
+
+@bot.hybrid_command(name='rmserver', description='Open a detailed interactive server information panel.')
+async def rm_server(ctx):
+    g = ctx.guild
+    e = make_embed(f'RM • {g.name}', f'Owner <@{g.owner_id}>\nMembers `{g.member_count}`\nChannels `{len(g.channels)}`\nRoles `{len(g.roles)}`\nCreated {discord.utils.format_dt(g.created_at, "F")}')
+    if g.icon: e.set_thumbnail(url=g.icon.url)
+    await ctx.reply(embed=e, view=RMServerView(ctx.author.id))
+'''
+          p.write_text(s.rstrip() + extra + '\n', encoding='utf-8')
+          print('Added RM interactive super-panel')
+          PY
+
+      - name: Validate Python syntax and import registration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements.txt
+          python -m py_compile bot.py main.py
+          DISCORD_TOKEN=dummy DISCORD_BOT_TOKEN=dummy python - <<'PY'
+          import bot
+          names = [c.qualified_name for c in bot.bot.walk_commands()]
+          dupes = sorted({n for n in names if names.count(n) > 1})
+          assert not dupes, f'Duplicate command names: {dupes}'
+          print(f'Loaded {len(names)} commands with no duplicate qualified names.')
+          PY
+
+      - name: Write integration commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add bot.py
+          if git diff --cached --quiet; then
+            echo 'No bot.py changes to commit.'
+          else
+            git commit -m 'Merge RM expansion and interactive super panel into bot.py'
+            git push
+          fi
