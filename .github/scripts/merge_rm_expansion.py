@@ -29,6 +29,9 @@ def clean_ui(source: str) -> str:
             continue
         if stripped == "HARDENED_UI_MARKER = \"# === RM HARDENED INTERACTIVE UI ===\"":
             continue
+        if stripped == "import bot as runtime":
+            continue
+        line = line.replace("runtime.", "")
         lines.append(line)
     return "\n".join(lines).rstrip()
 
