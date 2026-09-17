@@ -54,5 +54,6 @@ jobs:
             echo "bot.py was already up to date."
           else
             git commit -m "Merge RM expansion fully into bot.py"
-            git push
+            git pull --rebase origin main
+            git push origin main
           fi
