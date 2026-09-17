@@ -1,8 +1,8 @@
 """RM Bot single-entry runtime.
 
-bot.py remains the complete core runtime. rm_expansion.py is loaded here before
-startup so the existing RM expansion features and interactive workflows are
-registered into the same Discord client without deleting or replacing bot.py.
+bot.py is the complete runtime: the core bot and the full RM expansion UI,
+commands, animations, views, listeners, and interactive systems are all merged
+into that single module.
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from __future__ import annotations
 import sys
 
 from bot import TOKEN, bot
-import rm_expansion  # noqa: F401  # registers RM expansion commands/views/listeners
 
 
 def main() -> int:
@@ -18,8 +17,8 @@ def main() -> int:
         print("[RM] DISCORD_TOKEN / DISCORD_BOT_TOKEN is missing.", file=sys.stderr)
         return 1
 
-    print("[RM] Integrated runtime loading...")
-    print("[RM] Core bot + RM expansion + interactive UI registered")
+    print("[RM] Loading complete bot.py runtime...")
+    print("[RM] Core bot + full RM expansion + interactive UI loaded")
     print("[RM] Commands: slash + configured prefix")
     print("[RM] Servers will be reported after login.")
 
